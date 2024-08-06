@@ -8,7 +8,7 @@ COPY . .
 RUN npm run build --force
 
 # Stage 2: Serve with nginx
-FROM nginx
+FROM nginx:alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/build /usr/share/nginx/html
 
