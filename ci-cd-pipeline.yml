@@ -1,0 +1,60 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Log in to Amazon ECR
+        id: ecr_login
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Deploy to ECS
+        env:
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          ECS_TASK_DEFINITION: ${{ secrets.ECS_TASK_DEFINITION }}
+          CONTAINER_NAME: ${{ secrets.CONTAINER_NAME }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          ecs-deploy -c $ECS_CLUSTER -n $ECS_SERVICE -i $ECR_REPOSITORY:$IMAGE_TAG
+
+  test:
+    runs-on: ubuntu-latest
+    needs: deploy
+    
+    steps:
+      - name: Run integration tests
+        run: |
+          # Add commands to run your integration tests here
+          if [ $? -ne 0 ]; then
+            echo "Tests failed, rolling back"
+            ecs-deploy -c $ECS_CLUSTER -n $ECS_SERVICE -i $ECR_REPOSITORY:previous_image_tag
+            exit 1
+          fi
