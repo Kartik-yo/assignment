@@ -13,18 +13,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '14'
-
       - name: Install dependencies
-        run: npm install
+        run: yarn install
 
       - name: Build the application
-        run: |
-          echo "Building the application..."
-          npm run build --verbose
+        run: yarn build
 
       - name: Build Docker image
         run: |

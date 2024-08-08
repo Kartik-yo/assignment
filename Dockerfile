@@ -2,11 +2,10 @@
 FROM node:14 as build
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
+COPY package.json yarn.lock ./
+RUN yarn install
 COPY . .
-RUN echo "Building the application..."
-RUN npm run build 
+RUN yarn build
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine
