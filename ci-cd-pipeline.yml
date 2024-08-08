@@ -8,58 +8,73 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
-      
-      - name: Log in to Amazon ECR
-        id: ecr_login
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
-          registry: ${{ secrets.ECR_REGISTRY }}
+          node-version: '14'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build the application
+        run: |
+          echo "Building the application..."
+          npm run build --verbose
+
+      - name: Build Docker image
+        run: |
+          docker build -t my-repo/my-app:latest .
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - name: Push Docker image
+        run: docker push my-repo/my-app:latest
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ecs-task-definition.json
+          service: ${{ secrets.ECS_SERVICE }}
+          cluster: ${{ secrets.ECS_CLUSTER }}
+          wait-for-service-stability: true
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          region: us-east-1
-      
-      - name: Build, tag, and push image to Amazon ECR
-        env:
-          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      
-      - name: Deploy to ECS
-        env:
-          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
-          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-          ECS_TASK_DEFINITION: ${{ secrets.ECS_TASK_DEFINITION }}
-          CONTAINER_NAME: ${{ secrets.CONTAINER_NAME }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          ecs-deploy -c $ECS_CLUSTER -n $ECS_SERVICE -i $ECR_REPOSITORY:$IMAGE_TAG
+          aws-region: ${{ secrets.AWS_REGION }}
 
   test:
+    needs: build
     runs-on: ubuntu-latest
-    needs: deploy
-    
+
     steps:
-      - name: Run integration tests
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14'
+
+      - name: Run tests
+        run: npm test
+
+      - name: Integration tests
         run: |
-          # Add commands to run your integration tests here
-          if [ $? -ne 0 ]; then
-            echo "Tests failed, rolling back"
-            ecs-deploy -c $ECS_CLUSTER -n $ECS_SERVICE -i $ECR_REPOSITORY:previous_image_tag
-            exit 1
-          fi
+          # Add integration test commands here
+          echo "Running integration tests..."
+          npm run test:integration
+
+      - name: Rollback if tests fail
+        if: failure()
+        run: |
+          echo "Rolling back deployment..."
+          # Add rollback commands here, possibly updating ECS service to use the previous task definition
+
