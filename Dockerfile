@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 RUN echo "Building the application..."
-RUN npm run build --force
+RUN npm run build 
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine
